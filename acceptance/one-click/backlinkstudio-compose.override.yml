@@ -1,0 +1,13 @@
+services:
+  backlinkstudio-worker:
+    extra_hosts:
+      - "one-click.fixture:host-gateway"
+      - "blocked-one-click.fixture:host-gateway"
+    environment:
+      SubmissionSourceHttp__AllowedPrivateHosts__0: one-click.fixture
+      SubmissionSourceHttp__AllowedPrivateHosts__1: blocked-one-click.fixture
+      VerificationHttp__AllowedPrivateHosts__0: one-click.fixture
+      VerificationHttp__AllowedPrivateHosts__1: blocked-one-click.fixture
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__0: one-click.fixture
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__1: blocked-one-click.fixture
+      ControlledBrowser__MaximumDomBytes: "4194304"

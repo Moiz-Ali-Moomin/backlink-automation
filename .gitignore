@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+.env
+TestResults/
+coverage/
+artifacts/
+*.user
+*.suo
+*.log
+graphify-out/
+.dotnet/
+.tmp/

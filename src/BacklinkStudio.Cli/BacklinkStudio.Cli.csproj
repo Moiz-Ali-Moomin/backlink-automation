@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\BacklinkStudio.Application\BacklinkStudio.Application.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Infrastructure\BacklinkStudio.Infrastructure.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Discovery\BacklinkStudio.Discovery.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Opportunities\BacklinkStudio.Opportunities.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Submission\BacklinkStudio.Submission.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Verification\BacklinkStudio.Verification.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Reporting\BacklinkStudio.Reporting.csproj" />
+  </ItemGroup>
+</Project>

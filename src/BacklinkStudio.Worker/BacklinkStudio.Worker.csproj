@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\BacklinkStudio.Application\BacklinkStudio.Application.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Infrastructure\BacklinkStudio.Infrastructure.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Discovery\BacklinkStudio.Discovery.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Opportunities\BacklinkStudio.Opportunities.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Submission\BacklinkStudio.Submission.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Verification\BacklinkStudio.Verification.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Scheduling\BacklinkStudio.Scheduling.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Reporting\BacklinkStudio.Reporting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+  </ItemGroup>
+</Project>

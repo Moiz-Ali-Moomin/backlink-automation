@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" />
+    <ProjectReference Include="..\BacklinkStudio.Domain\BacklinkStudio.Domain.csproj" />
+    <ProjectReference Include="..\BacklinkStudio.Application\BacklinkStudio.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design"><PrivateAssets>all</PrivateAssets><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets></PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <!-- Official Microsoft browser automation client; required by the governed controlled-browser adapters. -->
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+</Project>

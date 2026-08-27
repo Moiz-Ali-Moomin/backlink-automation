@@ -1,0 +1,8 @@
+# Controlled WordPress acceptance-network URLs. Resolve these names only inside the operator-owned test network.
+http://wordpress-open/?p=1
+http://wordpress-moderated/?p=1
+http://wordpress-closed/?p=1
+http://wordpress-direct/?p=1
+
+# Intentional duplicate used to prove project-scoped normalized-URL deduplication.
+http://wordpress-open/?p=1

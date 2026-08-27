@@ -1,0 +1,33 @@
+# WordPress Automation
+
+Source validation is read-only. The guarded inspector follows bounded, revalidated redirects and records HTTP metadata plus explainable WordPress signals such as `wp-content`, `wp-includes`, generator metadata, REST metadata, comment-form controls, `comment_post_ID`, form action, cookies/nonces, login requirements, moderation text, and browser/manual requirements.
+
+`OwnedWordPressCommentAdapter` is the named business adapter. Its internal preference order is:
+
+1. the standard public WordPress comment form with freshly fetched hidden fields and cookies;
+2. `OwnedWordPressFallbackCommentAdapter` for an authorized compatible or `FallbackCandidate` source when the standard path is non-definitive, using page-derived WordPress and post evidence;
+3. `ControlledBrowserCommentAdapter` in an ephemeral credentialless exact-host context when static inspection is insufficient;
+4. a server-side `WordPressSiteProfile` path when an explicitly configured direct API or authenticated integration is required;
+5. `ManualActionRequired` when no governed strategy can execute.
+
+WordPress credential values are configured only under `WordPressSubmission:Credentials:<reference>` in the worker secret store. `credentialReference` is optional for `StandardComment` and `ControlledBrowser`, and required for `DirectApi` and `AuthenticatedIntegration`. Profiles persist the reference and approved same-host API base URL, never the password. Raw credentials are not accepted in MCP/REST campaign input, job payloads, attempts, audits, or logs. Disabling a profile revokes its direct path immediately.
+
+The standard strategy refreshes the source page, finds a WordPress-compatible comment form, copies bounded hidden fields, sends author/email/website/comment/post ID, and parses the response. It distinguishes published, pending moderation, duplicate, comments closed, login required, invalid post, rate limited, temporary, permanent, and uncertain outcomes. A published comment anchor can establish `ModerationStatus=Approved`; `unapproved` or moderation signals produce `PendingModeration`.
+
+The fallback strategy is not a generic form client. It is enabled only after the shared server-side ownership gate, accepts only an exact same-origin WordPress comment endpoint, and requires a positive post ID found on the source page. It tries at most four deterministic strategies drawn from the actual form action, detected action, detected endpoint, and same-origin WordPress comment endpoint. It recognizes bounded aliases for identity, website, comment, and post controls, stops after any definitive result, and never guesses or enumerates post IDs, submits unrelated forms, or invents cross-origin endpoints. Endpoint and redirect evidence are persisted on each durable submission attempt.
+
+Static compatibility is evidence, not an execution authorization decision. An authorized source with bounded WordPress evidence proceeds through standard, fallback, and browser paths until a definitive outcome is observed. Reaching the static response size limit produces `ResponseTooLargeForStaticInspection` and browser validation instead of a terminal invalid result. An uncertain POST is persisted as `ReconciliationRequired`/`Uncertain`, queues an immediate independent check, and is not blindly reposted.
+
+Neither REST/API success nor a comment reference verifies a backlink. Accepted outcomes create `PendingVerification` and automatically schedule verification; the verification subsystem must independently refetch the stored source page and observe an exact normalized target anchor before setting `Verified`. If a successful static check cannot resolve rendered content, an authorized exact-host browser verification may run within the same bounded browser boundary.
+
+The integration suite includes a real loopback TCP server that serves a WordPress-compatible form, nonce, and cookie, receives the actual HTTP form POST, and covers published, moderation, closed, duplicate, invalid input, rate limit, login, temporary, and permanent outcomes. `acceptance/wordpress/docker-compose.yml` supplies comments-open, comments-closed, moderation, and a separate direct-API WordPress instance for VPS/container acceptance. The direct instance generates a disposable Application Password at bootstrap and passes only its named server-side credential reference to the worker.
+
+The 2026-08-23 closure run proved both strategies against WordPress 6.8.2. The direct API created a real comment, persisted its strategy/reference, remained `PendingVerification` after HTTP success, and became `Verified` only after a later page fetch found the target anchor. A real invalid credential produced HTTP 401/`AuthorizationDenied`; stopping the direct site produced an uncertain retryable outcome that completed safely after restart. Credential content was absent from retained logs, audits, payloads, reports, and database text inspection.
+
+## Controlled browser boundary
+
+`ControlledBrowserValidationAdapter` and `ControlledBrowserCommentAdapter` use Playwright .NET with headless Chromium. They are internal named business adapters; REST, MCP, campaigns, and job payloads cannot supply JavaScript, arbitrary navigation targets, selectors, form endpoints, or credentials. Public browser execution requires the same effective ownership authorization as every other submission, an ephemeral exact-host context derived only from project/source authorization, a validated source, and normal campaign/rate/blocklist controls. A stored site profile is used only for special configuration; the ephemeral context never grants or persists ownership.
+
+The browser runtime is bounded to `ControlledBrowser:MaximumConcurrency` (validated from 1-4), creates an isolated context per operation, disables downloads and service workers, keeps TLS validation enabled, and aborts every cross-host request. The final address is revalidated against the exact authorized host and the existing SSRF/private-host policy. It fills only recognized comment controls and clicks the identified submit control. CAPTCHA, login-required, comments-closed, unsupported forms, and unauthorized redirects fail closed; no anti-bot, stealth, fingerprint spoofing, or access-control circumvention is attempted.
+
+The controlled integration test serves a JavaScript-only WordPress comment form from loopback. Static validation cannot resolve it, Chromium discovers it, the browser adapter posts it, persisted ownership remains `Unverified`/`false` under the test-only authorization decision, and a separate verifier must later observe the exact target anchor. Submission HTTP success alone never produces `Verified`.

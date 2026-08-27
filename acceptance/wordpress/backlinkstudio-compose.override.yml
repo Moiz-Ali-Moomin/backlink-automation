@@ -1,0 +1,11 @@
+services:
+  backlinkstudio-worker:
+    environment:
+      SubmissionSourceHttp__AllowedPrivateHosts__3: wordpress-direct
+      SubmissionSourceHttp__AllowedPrivateHosts__4: wordpress-unlisted
+      VerificationHttp__AllowedPrivateHosts__3: wordpress-direct
+      VerificationHttp__AllowedPrivateHosts__4: wordpress-unlisted
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__3: wordpress-direct
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__4: wordpress-unlisted
+      WordPressSubmission__Credentials__acceptance-direct__Username: acceptance-operator
+      WordPressSubmission__Credentials__acceptance-direct__ApplicationPassword: ${WORDPRESS_DIRECT_APPLICATION_PASSWORD:?WORDPRESS_DIRECT_APPLICATION_PASSWORD must be set}

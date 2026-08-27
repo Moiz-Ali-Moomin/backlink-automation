@@ -1,0 +1,110 @@
+name: backlinkstudio-wordpress-acceptance
+
+services:
+  wordpress-db:
+    image: mariadb:11.8.2
+    environment:
+      MARIADB_DATABASE: wordpress_acceptance
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: ${WORDPRESS_TEST_DB_PASSWORD:?WORDPRESS_TEST_DB_PASSWORD must be set}
+      MARIADB_ROOT_PASSWORD: ${WORDPRESS_TEST_DB_ROOT_PASSWORD:?WORDPRESS_TEST_DB_ROOT_PASSWORD must be set}
+    volumes:
+      - wordpress-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backlinkstudio-backend]
+
+  wordpress-open:
+    image: wordpress:6.8.2-php8.3-apache
+    environment: &wordpress-environment
+      WORDPRESS_DB_HOST: wordpress-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_TEST_DB_PASSWORD:?WORDPRESS_TEST_DB_PASSWORD must be set}
+      WORDPRESS_DB_NAME: wordpress_acceptance
+    volumes:
+      - wordpress-open-data:/var/www/html
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+    networks:
+      backlinkstudio-backend:
+        aliases: [wordpress-unlisted]
+
+  wordpress-moderated:
+    image: wordpress:6.8.2-php8.3-apache
+    environment:
+      <<: *wordpress-environment
+      WORDPRESS_TABLE_PREFIX: moderated_
+    volumes:
+      - wordpress-moderated-data:/var/www/html
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+    networks: [backlinkstudio-backend]
+
+  wordpress-closed:
+    image: wordpress:6.8.2-php8.3-apache
+    environment:
+      <<: *wordpress-environment
+      WORDPRESS_TABLE_PREFIX: closed_
+    volumes:
+      - wordpress-closed-data:/var/www/html
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+    networks: [backlinkstudio-backend]
+
+  wordpress-direct:
+    image: wordpress:6.8.2-php8.3-apache
+    environment:
+      <<: *wordpress-environment
+      WORDPRESS_TABLE_PREFIX: direct_
+      WORDPRESS_CONFIG_EXTRA: define('WP_ENVIRONMENT_TYPE', 'local');
+    volumes:
+      - wordpress-direct-data:/var/www/html
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+    networks: [backlinkstudio-backend]
+
+  wordpress-bootstrap:
+    image: wordpress:cli-2.12.0-php8.3
+    user: "0:0"
+    environment:
+      <<: *wordpress-environment
+      WORDPRESS_TEST_ADMIN_PASSWORD: ${WORDPRESS_TEST_ADMIN_PASSWORD:?WORDPRESS_TEST_ADMIN_PASSWORD must be set}
+    command: ["sh", "/bootstrap/bootstrap.sh"]
+    volumes:
+      - ./bootstrap.sh:/bootstrap/bootstrap.sh:ro
+      - wordpress-open-data:/sites/open
+      - wordpress-moderated-data:/sites/moderated
+      - wordpress-closed-data:/sites/closed
+      - wordpress-direct-data:/sites/direct
+      - wordpress-credentials-data:/credentials
+    depends_on:
+      wordpress-open:
+        condition: service_started
+      wordpress-moderated:
+        condition: service_started
+      wordpress-closed:
+        condition: service_started
+      wordpress-direct:
+        condition: service_started
+    restart: "no"
+    networks: [backlinkstudio-backend]
+
+volumes:
+  wordpress-db-data:
+  wordpress-open-data:
+  wordpress-moderated-data:
+  wordpress-closed-data:
+  wordpress-direct-data:
+  wordpress-credentials-data:
+
+networks:
+  backlinkstudio-backend:
+    external: true
+    name: ${BACKLINKSTUDIO_ACCEPTANCE_BACKEND_NETWORK:-backlinkstudio_backend}

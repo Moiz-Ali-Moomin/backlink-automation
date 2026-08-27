@@ -1,0 +1,265 @@
+name: backlinkstudio
+
+x-app-environment: &app-environment
+  ASPNETCORE_ENVIRONMENT: ${BACKLINKSTUDIO_ENVIRONMENT:-Production}
+  DOTNET_ENVIRONMENT: ${BACKLINKSTUDIO_ENVIRONMENT:-Production}
+  BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE: ${BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE:-false}
+  BACKLINKSTUDIO_TEST_ALLOWED_HOSTS: ${BACKLINKSTUDIO_TEST_ALLOWED_HOSTS:-}
+  ConnectionStrings__BacklinkStudio: Host=postgres;Port=5432;Database=${POSTGRES_DB:-backlinkstudio};Username=${POSTGRES_USER:-backlinkstudio};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set};GSS Encryption Mode=Disable
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+  Reporting__StoragePath: /var/lib/backlinkstudio/reports
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-security: &app-security
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  pids_limit: 256
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  stop_grace_period: 45s
+  logging: *json-logging
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-backlinkstudio}
+      POSTGRES_USER: ${POSTGRES_USER:-backlinkstudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    stop_grace_period: 60s
+    logging: *json-logging
+    networks: [backend]
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *json-logging
+    networks: [backend]
+
+  otel-collector:
+    image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.159.0}
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - ./deploy/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:${OTEL_METRICS_BIND_PORT:-9464}:9464"
+      - "127.0.0.1:${OTEL_HEALTH_BIND_PORT:-13133}:13133"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *json-logging
+    networks: [backend, edge]
+
+  backlinkstudio-migrate:
+    image: backlinkstudio-engine:${BACKLINKSTUDIO_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/api/BacklinkStudio.Api.dll", "--migrate"]
+    environment:
+      <<: *app-environment
+      BacklinkStudio__BootstrapApiKey: ${BACKLINKSTUDIO_BOOTSTRAP_API_KEY:?BACKLINKSTUDIO_BOOTSTRAP_API_KEY must be set}
+      BacklinkStudio__BootstrapName: ${BACKLINKSTUDIO_BOOTSTRAP_NAME:-Bootstrap Administrator}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    restart: "no"
+    networks: [backend]
+
+  backlinkstudio-api:
+    <<: *app-security
+    image: backlinkstudio-engine:${BACKLINKSTUDIO_IMAGE_TAG:-local}
+    command: ["/app/api/BacklinkStudio.Api.dll"]
+    environment:
+      <<: *app-environment
+      ASPNETCORE_URLS: http://+:8080
+      ApiRateLimit__PermitLimit: "${API_RATE_LIMIT_PERMITS:-120}"
+      ApiRateLimit__WindowSeconds: "${API_RATE_LIMIT_WINDOW_SECONDS:-60}"
+    depends_on:
+      backlinkstudio-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${API_BIND_PORT:-8080}:8080"
+    volumes:
+      - reports-data:/var/lib/backlinkstudio/reports:ro
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/api/BacklinkStudio.Api.dll", "--health-check"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks: [backend, edge]
+
+  backlinkstudio-mcp:
+    <<: *app-security
+    image: backlinkstudio-engine:${BACKLINKSTUDIO_IMAGE_TAG:-local}
+    command: ["/app/mcp/BacklinkStudio.Mcp.dll"]
+    environment:
+      <<: *app-environment
+      ASPNETCORE_URLS: http://+:8081
+      McpRateLimit__PermitLimit: "${MCP_RATE_LIMIT_PERMITS:-60}"
+      McpRateLimit__WindowSeconds: "${MCP_RATE_LIMIT_WINDOW_SECONDS:-60}"
+    depends_on:
+      backlinkstudio-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${MCP_BIND_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/mcp/BacklinkStudio.Mcp.dll", "--health-check"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks: [backend, edge]
+
+  backlinkstudio-worker:
+    <<: *app-security
+    init: true
+    ipc: host
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/playwright-seccomp.json
+    cap_add: [SYS_CHROOT]
+    image: backlinkstudio-worker:${BACKLINKSTUDIO_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-runtime
+    command: ["/app/worker/BacklinkStudio.Worker.dll"]
+    environment:
+      <<: *app-environment
+      ASPNETCORE_URLS: http://+:8082
+      Worker__Enabled: "true"
+      Worker__Concurrency: "${WORKER_CONCURRENCY:-4}"
+      Worker__BufferSize: "${WORKER_BUFFER_SIZE:-8}"
+      Worker__ClaimLeaseSeconds: "${WORKER_CLAIM_LEASE_SECONDS:-300}"
+      Worker__LeaseRenewalSeconds: "${WORKER_LEASE_RENEWAL_SECONDS:-30}"
+      Worker__HeartbeatIntervalSeconds: "${WORKER_HEARTBEAT_INTERVAL_SECONDS:-10}"
+      Worker__GlobalConcurrency: "${WORKER_GLOBAL_CONCURRENCY:-64}"
+      Worker__PerProjectConcurrency: "${WORKER_PROJECT_CONCURRENCY:-4}"
+      Worker__PerCampaignConcurrency: "${WORKER_CAMPAIGN_CONCURRENCY:-2}"
+      Worker__PerDomainConcurrency: "${WORKER_DOMAIN_CONCURRENCY:-1}"
+      Worker__RetryBaseDelaySeconds: "${WORKER_RETRY_BASE_SECONDS:-2}"
+      Worker__RetryMaximumDelaySeconds: "${WORKER_RETRY_MAX_SECONDS:-900}"
+      JobPlatform__PerDomainRequestIntervalMilliseconds: "${DOMAIN_REQUEST_INTERVAL_MS:-1000}"
+      JobPlatform__MaximumRateLimitWaitSeconds: "${DOMAIN_RATE_LIMIT_MAX_WAIT_SECONDS:-300}"
+      OperationalMetrics__PollIntervalSeconds: "${OPERATIONAL_METRICS_POLL_SECONDS:-15}"
+      OperationalMetrics__WorkerStaleSeconds: "${OPERATIONAL_METRICS_WORKER_STALE_SECONDS:-60}"
+      AnalysisHttp__TimeoutSeconds: "20"
+      AnalysisHttp__MaximumResponseBytes: "2097152"
+      AnalysisHttp__MaximumRedirects: "5"
+      VerificationHttp__TimeoutSeconds: "20"
+      VerificationHttp__MaximumResponseBytes: "${VERIFICATION_MAX_RESPONSE_BYTES:-10485760}"
+      VerificationHttp__MaximumRedirects: "5"
+      VerificationHttp__AllowedPrivateHosts__0: "${OWNED_PRIVATE_HOST_0:-disabled.invalid}"
+      VerificationHttp__AllowedPrivateHosts__1: "${OWNED_PRIVATE_HOST_1:-disabled.invalid}"
+      VerificationHttp__AllowedPrivateHosts__2: "${OWNED_PRIVATE_HOST_2:-disabled.invalid}"
+      DiscoveryHttp__TimeoutSeconds: "20"
+      DiscoveryHttp__MaximumResponseBytes: "2097152"
+      DiscoveryHttp__MaximumRedirects: "5"
+      SubmissionSourceHttp__AllowedPrivateHosts__0: "${OWNED_PRIVATE_HOST_0:-disabled.invalid}"
+      SubmissionSourceHttp__AllowedPrivateHosts__1: "${OWNED_PRIVATE_HOST_1:-disabled.invalid}"
+      SubmissionSourceHttp__AllowedPrivateHosts__2: "${OWNED_PRIVATE_HOST_2:-disabled.invalid}"
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__0: "${OWNED_INSECURE_HTTP_HOST_0:-disabled.invalid}"
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__1: "${OWNED_INSECURE_HTTP_HOST_1:-disabled.invalid}"
+      WordPressSubmission__AllowedInsecureControlledHttpHosts__2: "${OWNED_INSECURE_HTTP_HOST_2:-disabled.invalid}"
+      ControlledBrowser__Enabled: "${CONTROLLED_BROWSER_ENABLED:-true}"
+      ControlledBrowser__MaximumConcurrency: "${CONTROLLED_BROWSER_CONCURRENCY:-2}"
+      ControlledBrowser__NavigationTimeoutMilliseconds: "${CONTROLLED_BROWSER_NAVIGATION_TIMEOUT_MS:-20000}"
+      ControlledBrowser__ActionTimeoutMilliseconds: "${CONTROLLED_BROWSER_ACTION_TIMEOUT_MS:-10000}"
+      ControlledBrowser__MaximumDomBytes: "${CONTROLLED_BROWSER_MAX_DOM_BYTES:-2097152}"
+      ControlledBrowser__ChromiumSandbox: "${CONTROLLED_BROWSER_CHROMIUM_SANDBOX:-true}"
+      WordPressFallback__MaximumStrategies: "${WORDPRESS_FALLBACK_MAX_STRATEGIES:-4}"
+      Serper__Endpoint: "https://google.serper.dev/search"
+      Serper__ApiKey: ${SERPER_API_KEY:-}
+    depends_on:
+      backlinkstudio-migrate:
+        condition: service_completed_successfully
+    volumes:
+      - reports-data:/var/lib/backlinkstudio/reports
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/worker/BacklinkStudio.Worker.dll", "--health-check"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks: [backend, edge]
+
+  backlinkstudio-scheduler:
+    <<: *app-security
+    image: backlinkstudio-engine:${BACKLINKSTUDIO_IMAGE_TAG:-local}
+    command: ["/app/worker/BacklinkStudio.Worker.dll"]
+    environment:
+      <<: *app-environment
+      ASPNETCORE_URLS: http://+:8083
+      Worker__Enabled: "false"
+      Scheduler__Enabled: "true"
+      Scheduler__PollIntervalMilliseconds: "${SCHEDULER_POLL_INTERVAL_MS:-1000}"
+      Scheduler__ClaimLeaseSeconds: "${SCHEDULER_CLAIM_LEASE_SECONDS:-300}"
+      Scheduler__LeaseRenewalSeconds: "${SCHEDULER_LEASE_RENEWAL_SECONDS:-30}"
+      Scheduler__FailureRetrySeconds: "${SCHEDULER_FAILURE_RETRY_SECONDS:-30}"
+      OperationalMetrics__PollIntervalSeconds: "${OPERATIONAL_METRICS_POLL_SECONDS:-15}"
+      OperationalMetrics__WorkerStaleSeconds: "${OPERATIONAL_METRICS_WORKER_STALE_SECONDS:-60}"
+    depends_on:
+      backlinkstudio-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/worker/BacklinkStudio.Worker.dll", "--health-check"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks: [backend]
+
+volumes:
+  postgres-data:
+  reports-data:
+
+networks:
+  backend:
+    internal: true
+  edge:

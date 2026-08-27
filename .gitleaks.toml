@@ -1,0 +1,12 @@
+title = "BacklinkStudio secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deterministic non-secret values used by CI configuration validation and API-key hashing tests"
+regexTarget = "secret"
+regexes = [
+  '''bls_ci_placeholder_012345678901234567890123456789''',
+  '''bls_test_01234567890123456789012345678901'''
+]
