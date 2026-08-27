@@ -8,7 +8,7 @@ namespace BacklinkStudio.Submission;
 
 public sealed class SubmissionSourceImportJobExecutor(
     ISubmissionSourceRepository sources,
-    IOwnedNetworkRepository networks,
+    IOwnedNetworkExecutionAuthorizer authorizer,
     IUrlNormalizer urlNormalizer,
     IAuditSink audit,
     IStudioUnitOfWork unitOfWork,
@@ -28,10 +28,6 @@ public sealed class SubmissionSourceImportJobExecutor(
         if (sourceImport.ProjectId != job.ProjectId || sourceImport.JobId != job.Id)
             throw new ValidationException("Submission source import does not match its durable job.");
         if (sourceImport.Status == SubmissionSourceImportStatus.Completed) return;
-        var network = await networks.GetAsync(sourceImport.OwnedNetworkProfileId, false, cancellationToken)
-            ?? throw new PolicyRejectedException("The selected owned network no longer exists.");
-        if (network.ProjectId != job.ProjectId || !network.Enabled)
-            throw new PolicyRejectedException("The selected owned network is disabled or belongs to another project.");
         sourceImport.Start(timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -60,7 +56,7 @@ public sealed class SubmissionSourceImportJobExecutor(
             new KeyValuePair<string, object?>("source.format", sourceImport.Format.ToString()));
         audit.Append(new AuditEvent(ActorType.Worker, workerId, null, "submission_sources.import_complete", job.ProjectId,
             null, job.Id, job.CorrelationId,
-            $"importId={sourceImport.Id};networkId={network.Id};total={counters.Total};accepted={accepted};duplicates={duplicates};invalid={counters.Invalid};errors={counters.Errors}",
+            $"importId={sourceImport.Id};total={counters.Total};accepted={accepted};duplicates={duplicates};invalid={counters.Invalid};errors={counters.Errors}",
             "succeeded", null, completedAt));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await sources.DeleteImportChunksAsync(sourceImport.Id, cancellationToken);
@@ -75,8 +71,8 @@ public sealed class SubmissionSourceImportJobExecutor(
             counters.Total++;
             var value = line.Trim();
             if (value.Length == 0 || value.StartsWith('#')) continue;
-            AddItem(value, sourceImport.Tag, true, SourcePlatform.Unknown, CmsType.Unknown, sourceImport, batch,
-                counters);
+            await AddItemAsync(value, sourceImport.Tag, true, SourcePlatform.Unknown, CmsType.Unknown, sourceImport,
+                batch, counters, cancellationToken);
             if (batch.Count == BatchSize) await FlushAsync(sourceImport, batch, cancellationToken);
         }
         await FlushAsync(sourceImport, batch, cancellationToken);
@@ -123,14 +119,16 @@ public sealed class SubmissionSourceImportJobExecutor(
                 ? parsedPlatform : SourcePlatform.Unknown;
             var cms = cmsIndex >= 0 && Enum.TryParse<CmsType>(row[cmsIndex], true, out var parsedCms)
                 ? parsedCms : CmsType.Unknown;
-            AddItem(row[urlIndex], tag, enabled, platform, cms, sourceImport, batch, counters);
+            await AddItemAsync(row[urlIndex], tag, enabled, platform, cms, sourceImport, batch, counters,
+                cancellationToken);
             if (batch.Count == BatchSize) await FlushAsync(sourceImport, batch, cancellationToken);
         }
         await FlushAsync(sourceImport, batch, cancellationToken);
     }
 
-    private void AddItem(string value, string? tag, bool enabled, SourcePlatform platform, CmsType cms,
-        SubmissionSourceImport sourceImport, List<SubmissionSourceImportItem> batch, ImportCounters counters)
+    private async Task AddItemAsync(string value, string? tag, bool enabled, SourcePlatform platform, CmsType cms,
+        SubmissionSourceImport sourceImport, List<SubmissionSourceImportItem> batch, ImportCounters counters,
+        CancellationToken cancellationToken)
     {
         var normalized = urlNormalizer.Normalize(value);
         if (!normalized.IsValid)
@@ -139,15 +137,21 @@ public sealed class SubmissionSourceImportJobExecutor(
             return;
         }
         var host = new Uri(normalized.NormalizedUrl!, UriKind.Absolute).IdnHost.ToLowerInvariant();
-        batch.Add(new SubmissionSourceImportItem(sourceImport.Id, value.Trim(), normalized.NormalizedUrl!, normalized.Domain!, host,
-            platform, cms, OwnershipStatus.Unverified, false, tag, enabled));
+        var authorization = await authorizer.AuthorizeSourceAsync(sourceImport.ProjectId,
+            new OwnedNetworkSourceAuthorizationRequest(host, sourceImport.OwnedNetworkProfileId, enabled),
+            cancellationToken);
+        var profile = authorization.Allowed ? authorization.Profile : null;
+        batch.Add(new SubmissionSourceImportItem(sourceImport.Id, profile?.Id, value.Trim(), normalized.NormalizedUrl!,
+            normalized.Domain!, host, platform, cms, profile?.OwnershipStatus ?? OwnershipStatus.Unverified,
+            profile is not null && !authorization.TestOwnershipOverrideApplied,
+            tag, enabled));
         counters.Valid++;
     }
 
     private async Task FlushAsync(SubmissionSourceImport sourceImport, List<SubmissionSourceImportItem> batch, CancellationToken cancellationToken)
     {
         if (batch.Count == 0) return;
-        await sources.ImportBatchAsync(sourceImport.ProjectId, sourceImport.OwnedNetworkProfileId, batch, timeProvider.GetUtcNow(), cancellationToken);
+        await sources.ImportBatchAsync(sourceImport.ProjectId, batch, timeProvider.GetUtcNow(), cancellationToken);
         batch.Clear();
     }
 

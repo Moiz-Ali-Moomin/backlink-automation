@@ -31,6 +31,7 @@ public interface IOwnedNetworkRepository
 
 public sealed record SubmissionSourceImportItem(
     Guid SourceImportId,
+    Guid? OwnedNetworkProfileId,
     string OriginalUrl,
     string NormalizedUrl,
     string Domain,
@@ -52,7 +53,7 @@ public interface ISubmissionSourceRepository
     IAsyncEnumerable<ReadOnlyMemory<byte>> StreamImportChunksAsync(Guid importId, CancellationToken cancellationToken);
     Task<SubmissionSourceImport?> GetImportAsync(Guid id, bool tracked, CancellationToken cancellationToken);
     Task<SubmissionSourceImport?> FindImportByIdempotencyAsync(Guid projectId, string idempotencyKey, CancellationToken cancellationToken);
-    Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, Guid ownedNetworkProfileId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken);
     Task<int> CountByImportAsync(Guid importId, CancellationToken cancellationToken);
     Task DeleteImportChunksAsync(Guid importId, CancellationToken cancellationToken);
     Task<SubmissionSource?> GetAsync(Guid id, bool tracked, CancellationToken cancellationToken);

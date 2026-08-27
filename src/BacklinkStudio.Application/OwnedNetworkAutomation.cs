@@ -67,7 +67,7 @@ public sealed record UpdateOwnedNetworkCommand(
 public sealed record SubmissionSourceDto(
     Guid Id,
     Guid ProjectId,
-    Guid OwnedNetworkProfileId,
+    Guid? OwnedNetworkProfileId,
     Guid? SourceImportId,
     string OriginalUrl,
     string NormalizedUrl,
@@ -125,7 +125,7 @@ public sealed record SubmissionSourceDto(
 public sealed record SubmissionSourceImportDto(
     Guid Id,
     Guid ProjectId,
-    Guid OwnedNetworkProfileId,
+    Guid? OwnedNetworkProfileId,
     Guid? JobId,
     SubmissionSourceImportFormat Format,
     SubmissionSourceImportStatus Status,
@@ -145,7 +145,7 @@ public sealed record SubmissionSourceImportDto(
 
 public sealed record ImportSubmissionSourcesCommand(
     Guid ProjectId,
-    Guid OwnedNetworkProfileId,
+    Guid? OwnedNetworkProfileId,
     SubmissionSourceImportFormat Format,
     string FileName,
     string? Tag,

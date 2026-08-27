@@ -26,7 +26,9 @@ public sealed class WordPressSubmissionGateway(
         if (!request.EffectiveOwnershipAuthorized || !OwnedNetworkExecutionEligibility.IsTechnicallyExecutable(source))
             return Failure(WordPressSubmissionMode.ManualActionRequired, SubmissionStatus.ManualActionRequired,
                 SubmissionFailureKind.PolicyRejected, "The source is not an enabled, compatible, approved WordPress comment source.");
-        var siteProfile = await profiles.FindForSourceAsync(source.OwnedNetworkProfileId, source.Host, cancellationToken);
+        var siteProfile = source.OwnedNetworkProfileId is { } profileId
+            ? await profiles.FindForSourceAsync(profileId, source.Host, cancellationToken)
+            : null;
         if (siteProfile is not null && siteProfile.SubmissionMode is WordPressSubmissionMode.DirectApi or WordPressSubmissionMode.AuthenticatedIntegration)
             return await SubmitDirectAsync(request, siteProfile, cancellationToken);
         if (source.RequiresAuthentication || source.RequiresBrowser || source.RequiresManualAction)

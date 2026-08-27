@@ -7,7 +7,6 @@ namespace BacklinkStudio.Submission;
 
 public sealed class SubmissionSourceService(
     IProjectRepository projects,
-    IOwnedNetworkRepository networks,
     ISubmissionSourceRepository sources,
     IJobQueue jobs,
     IIdempotencyStore idempotency,
@@ -33,10 +32,6 @@ public sealed class SubmissionSourceService(
         if (await sources.FindImportByIdempotencyAsync(command.ProjectId, key, cancellationToken) is not null)
             throw new ConflictException("This source import idempotency key is already being processed.");
         _ = await projects.GetAsync(command.ProjectId, cancellationToken) ?? throw new ResourceNotFoundException("Project", command.ProjectId);
-        var network = await networks.GetAsync(command.OwnedNetworkProfileId, false, cancellationToken)
-            ?? throw new ResourceNotFoundException("OwnedNetworkProfile", command.OwnedNetworkProfileId);
-        if (network.ProjectId != command.ProjectId) throw new ValidationException("The owned network must belong to the import project.");
-
         var now = timeProvider.GetUtcNow();
         var sourceImport = new SubmissionSourceImport(command.ProjectId, command.OwnedNetworkProfileId, command.Format,
             command.FileName, command.Tag, key, now);
@@ -57,7 +52,7 @@ public sealed class SubmissionSourceService(
             JsonSerializer.Serialize(result), sealedAt));
         audit.Append(new AuditEvent(actor.ActorType, actor.ActorId, actor.CredentialId, "submission_sources.import_queued",
             command.ProjectId, null, persistent.Id, actor.RequestId,
-            $"importId={sourceImport.Id};networkId={network.Id};format={command.Format};bytes={byteLength};sha256={sha256}",
+            $"importId={sourceImport.Id};format={command.Format};bytes={byteLength};sha256={sha256}",
             "queued", actor.SourceAddress, sealedAt));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return result;
@@ -95,13 +90,6 @@ public sealed class SubmissionSourceService(
         var existing = await idempotency.FindAsync(scope, key, cancellationToken);
         if (existing is not null) return Idempotency.ReadExisting<SubmissionSourceValidationAcceptedDto>(existing, hash);
         _ = await projects.GetAsync(command.ProjectId, cancellationToken) ?? throw new ResourceNotFoundException("Project", command.ProjectId);
-        if (command.OwnedNetworkProfileId is { } networkId)
-        {
-            var network = await networks.GetAsync(networkId, false, cancellationToken)
-                ?? throw new ResourceNotFoundException("OwnedNetworkProfile", networkId);
-            if (network.ProjectId != command.ProjectId) throw new ValidationException("The owned network must belong to the validation project.");
-        }
-
         var now = timeProvider.GetUtcNow();
         var runId = Guid.CreateVersion7(now);
         var persistent = new PersistentJob(JobType.SubmissionSourceValidation, command.ProjectId, null,

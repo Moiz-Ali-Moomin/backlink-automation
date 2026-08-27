@@ -61,15 +61,22 @@ public sealed class CampaignService(
         var existing = await idempotency.FindAsync(scope, key, cancellationToken);
         if (existing is not null) return Idempotency.ReadExisting<CampaignDto>(existing, hash);
         _ = await projects.GetAsync(command.ProjectId, cancellationToken) ?? throw new ResourceNotFoundException("Project", command.ProjectId);
-        var network = await ownedNetworks.GetAsync(command.OwnedNetworkProfileId, false, cancellationToken)
-            ?? throw new ResourceNotFoundException("OwnedNetworkProfile", command.OwnedNetworkProfileId);
-        if (network.ProjectId != command.ProjectId) throw new ValidationException("The owned network must belong to the campaign project.");
+        OwnedNetworkProfile network;
         if (command.Mode == OwnedNetworkCampaignMode.AutomaticOwnedNetwork)
         {
-            var authorization = await ownedNetworkAuthorizer.AuthorizeProfileAsync(command.ProjectId, network.Id,
+            var authorization = await ownedNetworkAuthorizer.AuthorizeProfileAsync(command.ProjectId,
+                command.OwnedNetworkProfileId,
                 cancellationToken);
-            if (!authorization.Allowed)
+            if (!authorization.Allowed || authorization.Profile is null)
                 throw new UnauthorizedAccessException("Automatic campaigns require an authorized owned network.");
+            network = authorization.Profile;
+        }
+        else
+        {
+            network = await ownedNetworks.GetAsync(command.OwnedNetworkProfileId, false, cancellationToken)
+                ?? throw new ResourceNotFoundException("OwnedNetworkProfile", command.OwnedNetworkProfileId);
+            if (network.ProjectId != command.ProjectId)
+                throw new ValidationException("The owned network must belong to the campaign project.");
         }
         var identityPoolId = command.IdentityPoolId ?? network.DefaultIdentityPoolId
             ?? throw new ValidationException("The campaign requires an identity pool or an owned-network default.");

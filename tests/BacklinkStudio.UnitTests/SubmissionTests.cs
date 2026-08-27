@@ -47,6 +47,15 @@ public sealed class SubmissionTests
     }
 
     [Fact]
+    public void SubmissionSource_WithoutPersistedProfileCannotPermitAutomation()
+    {
+        Assert.Throws<DomainRuleException>(() => new SubmissionSource(
+            Guid.CreateVersion7(), null, "https://blog.example/post", "https://blog.example/post",
+            "blog.example", "blog.example", OwnershipStatus.Owned, true, null, true,
+            DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
     public void ExplicitApproval_AllowsAuthorizedManualCampaign_ButLimitsStillReject()
     {
         var now = DateTimeOffset.UtcNow;

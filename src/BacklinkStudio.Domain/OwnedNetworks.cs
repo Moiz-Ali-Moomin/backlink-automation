@@ -152,7 +152,7 @@ public sealed class SubmissionSource
 
     public SubmissionSource(
         Guid projectId,
-        Guid ownedNetworkProfileId,
+        Guid? ownedNetworkProfileId,
         string originalUrl,
         string normalizedUrl,
         string domain,
@@ -164,8 +164,8 @@ public sealed class SubmissionSource
         DateTimeOffset now,
         Guid? sourceImportId = null)
     {
-        if (ownershipStatus == OwnershipStatus.Unverified && automationPermitted)
-            throw new DomainRuleException("Automation cannot be permitted for an unverified submission source.");
+        if (automationPermitted && (ownershipStatus == OwnershipStatus.Unverified || ownedNetworkProfileId is null))
+            throw new DomainRuleException("Automation requires a server-authorized owned-network association.");
 
         Id = Guid.CreateVersion7(now);
         ProjectId = projectId;
@@ -190,7 +190,7 @@ public sealed class SubmissionSource
 
     public Guid Id { get; private set; }
     public Guid ProjectId { get; private set; }
-    public Guid OwnedNetworkProfileId { get; private set; }
+    public Guid? OwnedNetworkProfileId { get; private set; }
     public Guid? SourceImportId { get; private set; }
     public string OriginalUrl { get; private set; } = null!;
     public string NormalizedUrl { get; private set; } = null!;
@@ -246,7 +246,8 @@ public sealed class SubmissionSource
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public bool AllowsAutomaticExecution =>
-        Enabled && AutomationPermitted && OwnershipStatus != OwnershipStatus.Unverified &&
+        Enabled && OwnedNetworkProfileId is not null && AutomationPermitted &&
+        OwnershipStatus != OwnershipStatus.Unverified &&
         TechnicalCompatibility == TechnicalCompatibility.Compatible;
 
     public void QueueValidation(DateTimeOffset now)
@@ -257,8 +258,8 @@ public sealed class SubmissionSource
 
     public void ApplyOwnership(OwnershipStatus ownershipStatus, bool automationPermitted, DateTimeOffset now)
     {
-        if (ownershipStatus == OwnershipStatus.Unverified && automationPermitted)
-            throw new DomainRuleException("Automation cannot be permitted for an unverified submission source.");
+        if (automationPermitted && (ownershipStatus == OwnershipStatus.Unverified || OwnedNetworkProfileId is null))
+            throw new DomainRuleException("Automation requires a server-authorized owned-network association.");
         OwnershipStatus = ownershipStatus;
         AutomationPermitted = automationPermitted;
         UpdatedAt = now;
@@ -374,7 +375,7 @@ public sealed class SubmissionSourceImport
 {
     private SubmissionSourceImport() { }
 
-    public SubmissionSourceImport(Guid projectId, Guid ownedNetworkProfileId, SubmissionSourceImportFormat format, string fileName, string? tag, string idempotencyKey, DateTimeOffset now)
+    public SubmissionSourceImport(Guid projectId, Guid? ownedNetworkProfileId, SubmissionSourceImportFormat format, string fileName, string? tag, string idempotencyKey, DateTimeOffset now)
     {
         Id = Guid.CreateVersion7(now);
         ProjectId = projectId;
@@ -390,7 +391,7 @@ public sealed class SubmissionSourceImport
 
     public Guid Id { get; private set; }
     public Guid ProjectId { get; private set; }
-    public Guid OwnedNetworkProfileId { get; private set; }
+    public Guid? OwnedNetworkProfileId { get; private set; }
     public Guid? JobId { get; private set; }
     public SubmissionSourceImportFormat Format { get; private set; }
     public SubmissionSourceImportStatus Status { get; private set; }

@@ -24,6 +24,86 @@ namespace BacklinkStudio.IntegrationTests;
 public sealed class PostgresWorkflowTests
 {
     [Fact]
+    public async Task SourceImport_ResolvesAuthorizationPerSourceWithoutCallerProfile()
+    {
+        Assert.SkipWhen(Environment.GetEnvironmentVariable("BACKLINKSTUDIO_RUN_CONTAINER_TESTS") != "1",
+            "Set BACKLINKSTUDIO_RUN_CONTAINER_TESTS=1 on a Docker-enabled host.");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
+        await postgres.StartAsync(cancellationToken);
+        await using var provider = BuildProvider(postgres.GetConnectionString());
+        await MigrateAndSeedAsync(provider, cancellationToken);
+        var now = TimeProvider.System.GetUtcNow();
+        Guid projectId;
+        Guid networkId;
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var project = new Project("Profile-free source import", "target.example", null, now);
+            var policy = new PolicyDefinition(project.Id, now);
+            policy.Update(true, 0, 100, false, 1_000, 10_000, 1_000, now);
+            var network = new OwnedNetworkProfile(project.Id, "Import network", null,
+                OwnershipStatus.Controlled, true, null, null, null, 8, 2, 0, true, now);
+            var rule = new OwnedNetworkDomain(network.Id, "owned.example",
+                OwnedNetworkDomainMatchType.ExactHost, true, now);
+            var db = scope.ServiceProvider.GetRequiredService<BacklinkStudioDbContext>();
+            db.AddRange(project, policy, network, rule);
+            await db.SaveChangesAsync(cancellationToken);
+            projectId = project.Id;
+            networkId = network.Id;
+        }
+
+        SubmissionSourceImportAcceptedDto accepted;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(
+                "https://owned.example/post/\nhttps://not-authorized.example/post/\n");
+            await using var content = new MemoryStream(bytes, writable: false);
+            accepted = await scope.ServiceProvider.GetRequiredService<ISubmissionSourceService>().ImportAsync(
+                new(projectId, null, SubmissionSourceImportFormat.Txt, "sources.txt", null,
+                    "profile-free-import"), content,
+                new(ActorType.Agent, "integration", null, "profile-free-import", "local"), cancellationToken);
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
+            var job = Assert.IsType<PersistentJob>(await queue.ClaimAsync("import-worker",
+                TimeSpan.FromMinutes(5), ClaimLimits, TimeProvider.System.GetUtcNow(), cancellationToken));
+            Assert.Equal(accepted.JobId, job.Id);
+            await scope.ServiceProvider.GetServices<IJobExecutor>()
+                .Single(value => value.JobType == JobType.SubmissionSourceImport)
+                .ExecuteAsync(job, "import-worker", cancellationToken);
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BacklinkStudioDbContext>();
+            var sourceImport = await db.SubmissionSourceImports.AsNoTracking()
+                .SingleAsync(value => value.Id == accepted.ImportId, cancellationToken);
+            Assert.Null(sourceImport.OwnedNetworkProfileId);
+            var rows = await db.SubmissionSources.AsNoTracking()
+                .Where(value => value.SourceImportId == accepted.ImportId)
+                .OrderBy(value => value.Host).ToArrayAsync(cancellationToken);
+            var authorized = Assert.Single(rows, value => value.Host == "owned.example");
+            Assert.Equal(networkId, authorized.OwnedNetworkProfileId);
+            Assert.Equal(OwnershipStatus.Controlled, authorized.OwnershipStatus);
+            Assert.True(authorized.AutomationPermitted);
+            var unauthorized = Assert.Single(rows, value => value.Host == "not-authorized.example");
+            Assert.Null(unauthorized.OwnedNetworkProfileId);
+            Assert.Equal(OwnershipStatus.Unverified, unauthorized.OwnershipStatus);
+            Assert.False(unauthorized.AutomationPermitted);
+            var invariant = await Assert.ThrowsAsync<PostgresException>(() =>
+                db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE submission_sources
+                    SET ownership_status = 'Owned', automation_permitted = true
+                    WHERE id = {unauthorized.Id}
+                    """, cancellationToken));
+            Assert.Equal(PostgresErrorCodes.CheckViolation, invariant.SqlState);
+        }
+    }
+
+    [Fact]
     public async Task BacklinkWorkflowStart_PersistsMixedBatchBeforeWorkerAuthorization()
     {
         Assert.SkipWhen(Environment.GetEnvironmentVariable("BACKLINKSTUDIO_RUN_CONTAINER_TESTS") != "1",

@@ -72,7 +72,7 @@ public sealed class SubmissionContentTests
         public async IAsyncEnumerable<ReadOnlyMemory<byte>> StreamImportChunksAsync(Guid importId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken) { await Task.CompletedTask; yield break; }
         public Task<SubmissionSourceImport?> GetImportAsync(Guid id, bool tracked, CancellationToken cancellationToken) => Task.FromResult<SubmissionSourceImport?>(null);
         public Task<SubmissionSourceImport?> FindImportByIdempotencyAsync(Guid projectId, string idempotencyKey, CancellationToken cancellationToken) => Task.FromResult<SubmissionSourceImport?>(null);
-        public Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, Guid ownedNetworkProfileId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> CountByImportAsync(Guid importId, CancellationToken cancellationToken) => Task.FromResult(0);
         public Task DeleteImportChunksAsync(Guid importId, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<SubmissionSource?> GetAsync(Guid id, bool tracked, CancellationToken cancellationToken) => Task.FromResult<SubmissionSource?>(id == source.Id ? source : null);

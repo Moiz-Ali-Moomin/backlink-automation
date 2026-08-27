@@ -93,7 +93,7 @@ The normal placement path is `POST /api/v1/backlink-workflows` with `projectId`,
 |---|---|---|---|
 | GET/POST | `/api/v1/owned-networks` | `owned_networks:read/write` | profile page / profile |
 | GET/PUT | `/api/v1/owned-networks/{id}` | `owned_networks:read/write` | profile with domain rules |
-| POST | `/api/v1/submission-sources/import` | `submission_sources:write` | durable import/job IDs |
+| POST | `/api/v1/submission-sources/import` | `submission_sources:write` | profile-free durable import/job IDs; per-source authorization is resolved internally |
 | GET | `/api/v1/submission-source-imports/{id}` | `submission_sources:read` | import counters/status |
 | GET | `/api/v1/submission-sources` | `submission_sources:read` | filtered keyset page |
 | GET | `/api/v1/submission-sources/{id}` | `submission_sources:read` | detected source details |

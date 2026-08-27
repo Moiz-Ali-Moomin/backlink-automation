@@ -7,6 +7,7 @@ namespace BacklinkStudio.Submission;
 public sealed class OwnedNetworkWorkflowJobExecutor(
     ISubmissionSourceService sourceService,
     ICampaignService campaigns,
+    IOwnedNetworkExecutionAuthorizer authorizer,
     IJobQueue jobs,
     IAuditSink audit,
     IStudioUnitOfWork unitOfWork,
@@ -31,6 +32,11 @@ public sealed class OwnedNetworkWorkflowJobExecutor(
             await ContinueAsync(job, payload, "import", cancellationToken);
             return;
         }
+
+        var authorization = await authorizer.AuthorizeProfileAsync(job.ProjectId,
+            payload.Campaign.OwnedNetworkProfileId, cancellationToken);
+        if (!authorization.Allowed)
+            throw new PolicyRejectedException("The persisted project/network policy does not authorize this workflow profile.");
 
         var workflowRequestId = $"owned-network-workflow:{payload.WorkflowId:D}";
         var actor = ActorContext.System(workflowRequestId);

@@ -186,7 +186,7 @@ static async Task<SubmissionSourceImportAcceptedDto> ImportSourcesAsync(IService
         ?? (Path.GetExtension(path).Equals(".csv", StringComparison.OrdinalIgnoreCase) ? SubmissionSourceImportFormat.Csv : SubmissionSourceImportFormat.Txt);
     await using var content = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1_024, FileOptions.Asynchronous | FileOptions.SequentialScan);
     return await services.GetRequiredService<ISubmissionSourceService>().ImportAsync(new ImportSubmissionSourcesCommand(
-        GuidOption(args, "--project"), GuidOption(args, "--network"), format, Path.GetFileName(path), StringOption(args, "--tag"), RequestKey(args)),
+        GuidOption(args, "--project"), null, format, Path.GetFileName(path), StringOption(args, "--tag"), RequestKey(args)),
         content, actor, CancellationToken.None);
 }
 

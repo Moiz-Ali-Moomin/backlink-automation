@@ -79,7 +79,7 @@ public sealed class WordPressSubmissionTests
     public async Task DirectApi_UsesNamedCredentialAndDoesNotPlaceSecretInPayload()
     {
         var source = CompatibleSource();
-        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId, source.Host, "https://blog.example/",
+        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId!.Value, source.Host, "https://blog.example/",
             "owned-blog", WordPressSubmissionMode.DirectApi, true, DateTimeOffset.UtcNow);
         var handler = new DirectWordPressHandler();
         var settings = new WordPressSubmissionOptions();
@@ -100,7 +100,7 @@ public sealed class WordPressSubmissionTests
     public async Task DirectApi_RejectsRevokedOrMissingNamedCredentialBeforeNetworkIo()
     {
         var source = CompatibleSource();
-        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId, source.Host, "https://blog.example/",
+        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId!.Value, source.Host, "https://blog.example/",
             "revoked-owned-blog", WordPressSubmissionMode.DirectApi, true, DateTimeOffset.UtcNow);
         var handler = new DirectWordPressHandler();
         var gateway = new WordPressSubmissionGateway(new HttpClient(handler), new SingleProfile(profile),
@@ -118,7 +118,7 @@ public sealed class WordPressSubmissionTests
     public async Task DirectApi_ClassifiesTemporaryFailureForRetryWithoutLeakingCredential()
     {
         var source = CompatibleSource();
-        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId, source.Host, "https://blog.example/",
+        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId!.Value, source.Host, "https://blog.example/",
             "owned-blog", WordPressSubmissionMode.DirectApi, true, DateTimeOffset.UtcNow);
         var handler = new DirectWordPressHandler(HttpStatusCode.ServiceUnavailable,
             "{\"code\":\"rest_unavailable\"}");
@@ -140,7 +140,7 @@ public sealed class WordPressSubmissionTests
     public async Task DirectApi_ClassifiesPermanentAuthenticationRejectionWithoutLeakingCredential()
     {
         var source = CompatibleSource();
-        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId, source.Host, "https://blog.example/",
+        var profile = new WordPressSiteProfile(source.OwnedNetworkProfileId!.Value, source.Host, "https://blog.example/",
             "owned-blog", WordPressSubmissionMode.DirectApi, true, DateTimeOffset.UtcNow);
         var handler = new DirectWordPressHandler(HttpStatusCode.Unauthorized,
             "{\"code\":\"rest_cannot_create\",\"message\":\"invalid application password\"}");

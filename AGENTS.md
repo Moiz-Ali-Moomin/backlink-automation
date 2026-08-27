@@ -44,15 +44,15 @@ Supported ownership states:
 
 Automatic execution requires both `OwnershipStatus != Unverified` and `AutomationPermitted = true`.
 
-A source imported from a generic TXT or CSV file must not automatically become trusted unless the import is associated with a pre-approved owned network profile. A pre-approved `OwnedNetworkProfile` may authorize all source URLs matching its configured ownership rules.
+A source imported from a generic TXT or CSV file must not automatically become trusted. A pre-approved `OwnedNetworkProfile` may authorize source URLs that match its persisted ownership rules; the upload itself grants nothing.
 
-Normal `backlink_workflow_start` operations must never request ownership metadata, `AutomationPermitted`, `OwnedNetworkProfileId`, `WordPressSiteProfileId`, adapter selection, or credentials for ordinary public comment forms.
+Normal `backlink_workflow_start` operations require only source URLs, identities, comments, target URL, and optional execution tuning.
 
-Execution authorization is resolved automatically from persisted server-side project/network policy.
+Do not ask the caller for `OwnershipStatus`, `AutomationPermitted`, `OwnedNetworkProfileId`, `WordPressSiteProfileId`, adapter selection, Playwright configuration, or credentials for ordinary public comment forms.
 
-If a source is already authorized, proceed automatically through the bounded standard -> fallback -> browser strategy chain.
+Authorization is resolved automatically from persisted server-side configuration using the canonical execution authorizer.
 
-If authorization is absent, return `NotAuthorized` for that source without asking the caller questions, and continue the rest of the batch.
+Per-source authorization failures must become durable result states and must not abort an otherwise valid mixed batch. If a source is already authorized, proceed automatically through the bounded standard -> fallback -> browser strategy chain. If authorization is absent, return `NotAuthorized` without asking the caller questions.
 
 Generic TXT/CSV upload remains input only and never grants execution authorization.
 

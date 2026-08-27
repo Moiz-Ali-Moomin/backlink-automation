@@ -261,7 +261,7 @@ public sealed class BacklinkStudioDbContext(DbContextOptions<BacklinkStudioDbCon
         var source = modelBuilder.Entity<SubmissionSource>();
         source.ToTable("submission_sources", table =>
         {
-            table.HasCheckConstraint("ck_submission_sources_automation_ownership", "NOT automation_permitted OR ownership_status <> 'Unverified'");
+            table.HasCheckConstraint("ck_submission_sources_automation_ownership", "NOT automation_permitted OR (owned_network_profile_id IS NOT NULL AND ownership_status <> 'Unverified')");
             table.HasCheckConstraint("ck_submission_sources_counters", "success_count >= 0 AND failure_count >= 0 AND pending_moderation_count >= 0 AND verified_count >= 0 AND lost_count >= 0");
             table.HasCheckConstraint("ck_submission_sources_content_length", "last_content_length IS NULL OR last_content_length >= 0");
         }).HasKey(x => x.Id);
@@ -322,7 +322,7 @@ public sealed class BacklinkStudioDbContext(DbContextOptions<BacklinkStudioDbCon
         source.Property(x => x.CreatedAt).HasColumnName("created_at");
         source.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         source.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
-        source.HasOne<OwnedNetworkProfile>().WithMany().HasForeignKey(x => x.OwnedNetworkProfileId).OnDelete(DeleteBehavior.Restrict);
+        source.HasOne<OwnedNetworkProfile>().WithMany().HasForeignKey(x => x.OwnedNetworkProfileId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         source.HasIndex(x => new { x.ProjectId, x.NormalizedUrl }).IsUnique();
         source.HasIndex(x => x.SourceImportId);
         source.HasIndex(x => new { x.ProjectId, x.CreatedAt, x.Id });
@@ -373,7 +373,7 @@ public sealed class BacklinkStudioDbContext(DbContextOptions<BacklinkStudioDbCon
         sourceImport.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         sourceImport.Property(x => x.CompletedAt).HasColumnName("completed_at");
         sourceImport.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
-        sourceImport.HasOne<OwnedNetworkProfile>().WithMany().HasForeignKey(x => x.OwnedNetworkProfileId).OnDelete(DeleteBehavior.Restrict);
+        sourceImport.HasOne<OwnedNetworkProfile>().WithMany().HasForeignKey(x => x.OwnedNetworkProfileId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
         sourceImport.HasOne<PersistentJob>().WithMany().HasForeignKey(x => x.JobId).OnDelete(DeleteBehavior.Restrict);
         sourceImport.HasIndex(x => new { x.ProjectId, x.IdempotencyKey }).IsUnique();
         sourceImport.HasIndex(x => x.JobId).IsUnique();

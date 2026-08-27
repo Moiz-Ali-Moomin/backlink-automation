@@ -61,12 +61,12 @@ public static class ApiEndpoints
             return Results.Ok(await service.UpdateAsync(command, HttpActorContext.From(context), cancellationToken));
         }).RequireAuthorization(AuthorizationScopes.OwnedNetworksWrite);
 
-        api.MapPost("/submission-sources/import", async (Guid projectId, Guid networkId, SubmissionSourceImportFormat format,
+        api.MapPost("/submission-sources/import", async (Guid projectId, SubmissionSourceImportFormat format,
             string fileName, string? tag, HttpContext context, ISubmissionSourceService service, CancellationToken cancellationToken) =>
         {
             var bodyLimit = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
             if (bodyLimit is { IsReadOnly: false }) bodyLimit.MaxRequestBodySize = 1L * 1_024 * 1_024 * 1_024;
-            var result = await service.ImportAsync(new ImportSubmissionSourcesCommand(projectId, networkId, format, fileName, tag,
+            var result = await service.ImportAsync(new ImportSubmissionSourcesCommand(projectId, null, format, fileName, tag,
                 HttpActorContext.IdempotencyKey(context)), context.Request.Body, HttpActorContext.From(context), cancellationToken);
             return Results.Accepted($"/api/v1/submission-source-imports/{result.ImportId}", result);
         }).DisableAntiforgery().RequireAuthorization(AuthorizationScopes.SubmissionSourcesWrite);

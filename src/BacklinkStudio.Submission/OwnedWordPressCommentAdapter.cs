@@ -14,7 +14,9 @@ public sealed class OwnedWordPressCommentAdapter(
     public async Task<OwnedWordPressSubmissionResult> SubmitAsync(OwnedWordPressSubmissionRequest request, CancellationToken cancellationToken)
     {
         var source = request.Source;
-        var profile = await profiles.FindForSourceAsync(source.OwnedNetworkProfileId, source.Host, cancellationToken);
+        var profile = source.OwnedNetworkProfileId is { } profileId
+            ? await profiles.FindForSourceAsync(profileId, source.Host, cancellationToken)
+            : null;
         if (profile?.SubmissionMode is WordPressSubmissionMode.DirectApi or WordPressSubmissionMode.AuthenticatedIntegration)
             return await standard.SubmitAsync(request, cancellationToken);
 

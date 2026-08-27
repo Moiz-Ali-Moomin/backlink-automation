@@ -345,8 +345,10 @@ public sealed class SubmissionPreviewService(
         var source = await sources.GetAsync(command.SubmissionSourceId, false, cancellationToken)
             ?? throw new ResourceNotFoundException("SubmissionSource", command.SubmissionSourceId);
         if (source.ProjectId != command.ProjectId) throw new ResourceNotFoundException("SubmissionSource", command.SubmissionSourceId);
-        var network = await networks.GetAsync(source.OwnedNetworkProfileId, false, cancellationToken)
-            ?? throw new ResourceNotFoundException("OwnedNetworkProfile", source.OwnedNetworkProfileId);
+        var ownedNetworkProfileId = source.OwnedNetworkProfileId
+            ?? throw new ResourceNotFoundException("OwnedNetworkProfile", Guid.Empty);
+        var network = await networks.GetAsync(ownedNetworkProfileId, false, cancellationToken)
+            ?? throw new ResourceNotFoundException("OwnedNetworkProfile", ownedNetworkProfileId);
         var identityPoolId = command.IdentityPoolId ?? network.DefaultIdentityPoolId
             ?? throw new ValidationException("An identity pool is required because the owned network has no default.");
         var templatePoolId = command.TemplatePoolId ?? network.DefaultTemplatePoolId

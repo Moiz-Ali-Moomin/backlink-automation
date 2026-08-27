@@ -140,6 +140,21 @@ public sealed class McpToolSchemaContractTests
         Assert.DoesNotContain("browser", names);
     }
 
+    [Fact]
+    public void SourceImportSchema_DoesNotRequireOrExposeOwnedNetworkProfile()
+    {
+        var tool = Assert.Single(McpToolDispatcher.Tools, x => x.Name == "submission_sources_import");
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(tool.InputSchema, SerializerOptions));
+        var properties = document.RootElement.GetProperty("properties");
+        var names = properties.EnumerateObject().Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
+        var required = document.RootElement.GetProperty("required").EnumerateArray()
+            .Select(value => value.GetString()).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("ownedNetworkId", names);
+        Assert.DoesNotContain("ownedNetworkProfileId", names);
+        Assert.DoesNotContain("ownedNetworkId", required);
+    }
+
     /// <summary>
     /// Explicit coverage for the tools an MCP client previously rejected because a no-argument
     /// string property serialized <c>"description": null</c>.

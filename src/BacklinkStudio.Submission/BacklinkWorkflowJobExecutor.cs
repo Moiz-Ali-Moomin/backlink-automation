@@ -64,13 +64,11 @@ public sealed class BacklinkWorkflowJobExecutor(
                     : network.OwnershipStatus;
                 source = new SubmissionSource(workflow.ProjectId, network.Id, item.OriginalUrl,
                     item.NormalizedUrl, item.Domain, item.Host, sourceOwnership,
-                    !authorization.TestOwnershipOverrideApplied && network.AutomationPermitted,
+                    !authorization.TestOwnershipOverrideApplied,
                     null, true, now);
                 sources.Add(source);
             }
-            else if (!authorization.TestOwnershipOverrideApplied &&
-                     (source.OwnedNetworkProfileId != network.Id || !source.AutomationPermitted ||
-                      source.OwnershipStatus == OwnershipStatus.Unverified))
+            else if (!authorization.TestOwnershipOverrideApplied)
             {
                 source.AssociateWithOwnedNetwork(network.Id, network.OwnershipStatus, true, now);
             }

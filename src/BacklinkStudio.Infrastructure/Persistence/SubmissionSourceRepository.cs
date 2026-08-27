@@ -41,7 +41,7 @@ public sealed class SubmissionSourceRepository(BacklinkStudioDbContext dbContext
         dbContext.SubmissionSourceImports.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ProjectId == projectId && x.IdempotencyKey == idempotencyKey, cancellationToken);
 
-    public async Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, Guid ownedNetworkProfileId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<SubmissionSourceImportPersistenceResult> ImportBatchAsync(Guid projectId, IReadOnlyList<SubmissionSourceImportItem> items, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (items.Count == 0) return new(0, 0);
         var connection = (NpgsqlConnection)dbContext.Database.GetDbConnection();
@@ -52,7 +52,8 @@ public sealed class SubmissionSourceRepository(BacklinkStudioDbContext dbContext
             create.Transaction = transaction;
             create.CommandText = """
                 CREATE TEMP TABLE source_import_batch (
-                    id uuid NOT NULL, original_url text NOT NULL, normalized_url text NOT NULL,
+                    id uuid NOT NULL, owned_network_profile_id uuid NULL,
+                    original_url text NOT NULL, normalized_url text NOT NULL,
                     domain text NOT NULL, host text NOT NULL, ownership_status text NOT NULL,
                     platform text NOT NULL, cms_type text NOT NULL, automation_permitted boolean NOT NULL,
                     tag text NULL, enabled boolean NOT NULL
@@ -61,12 +62,16 @@ public sealed class SubmissionSourceRepository(BacklinkStudioDbContext dbContext
             await create.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await using (var importer = await connection.BeginBinaryImportAsync("COPY source_import_batch (id, original_url, normalized_url, domain, host, ownership_status, platform, cms_type, automation_permitted, tag, enabled) FROM STDIN (FORMAT BINARY)", cancellationToken))
+        await using (var importer = await connection.BeginBinaryImportAsync("COPY source_import_batch (id, owned_network_profile_id, original_url, normalized_url, domain, host, ownership_status, platform, cms_type, automation_permitted, tag, enabled) FROM STDIN (FORMAT BINARY)", cancellationToken))
         {
             foreach (var item in items)
             {
                 await importer.StartRowAsync(cancellationToken);
                 await importer.WriteAsync(Guid.CreateVersion7(now), NpgsqlDbType.Uuid, cancellationToken);
+                if (item.OwnedNetworkProfileId is { } profileId)
+                    await importer.WriteAsync(profileId, NpgsqlDbType.Uuid, cancellationToken);
+                else
+                    await importer.WriteNullAsync(cancellationToken);
                 await importer.WriteAsync(item.OriginalUrl, NpgsqlDbType.Text, cancellationToken);
                 await importer.WriteAsync(item.NormalizedUrl, NpgsqlDbType.Text, cancellationToken);
                 await importer.WriteAsync(item.Domain, NpgsqlDbType.Text, cancellationToken);
@@ -95,7 +100,7 @@ public sealed class SubmissionSourceRepository(BacklinkStudioDbContext dbContext
                     supports_owned_property_placement, redirect_chain, comments_enabled, additional_required_fields,
                     requires_cookies, requires_nonce, tag, success_count, failure_count,
                     pending_moderation_count, verified_count, lost_count, enabled, created_at, updated_at)
-                SELECT id, @project_id, @network_id, @import_id, original_url, normalized_url, domain, host,
+                SELECT id, @project_id, owned_network_profile_id, @import_id, original_url, normalized_url, domain, host,
                     platform, cms_type, 'Unknown', ownership_status, automation_permitted,
                     'Unknown', 'Pending', false, false, false, false, false, false, ARRAY[]::text[], false,
                     ARRAY[]::text[], false, false, tag,
@@ -104,7 +109,6 @@ public sealed class SubmissionSourceRepository(BacklinkStudioDbContext dbContext
                 ON CONFLICT (project_id, normalized_url) DO NOTHING
                 """;
             insert.Parameters.AddWithValue("project_id", projectId);
-            insert.Parameters.AddWithValue("network_id", ownedNetworkProfileId);
             insert.Parameters.AddWithValue("import_id", items.Count > 0 ? items[0].SourceImportId : throw new InvalidOperationException());
             insert.Parameters.AddWithValue("now", now);
             accepted = await insert.ExecuteNonQueryAsync(cancellationToken);
