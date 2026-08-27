@@ -101,9 +101,8 @@ public sealed class SubmissionSourceValidationJobExecutor(
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return;
         }
-        if (!ownership.TestOwnershipOverrideApplied)
-            source.AssociateWithOwnedNetwork(ownership.Profile.Id, ownership.Profile.OwnershipStatus, true,
-                timeProvider.GetUtcNow());
+        source.AssociateWithOwnedNetwork(ownership.Profile.Id, ownership.Profile.OwnershipStatus, true,
+            timeProvider.GetUtcNow());
 
         try
         {

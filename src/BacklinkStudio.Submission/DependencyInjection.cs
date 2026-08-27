@@ -12,16 +12,10 @@ public static class DependencyInjection
         IConfiguration configuration,
         string environmentName)
     {
-        var testOwnershipOverride = TestOwnershipOverrideOptions.FromConfiguration(configuration, environmentName);
-        services.AddSingleton(testOwnershipOverride);
-        services.AddScoped<OwnedNetworkExecutionAuthorizer>();
-        services.AddScoped<IOwnedNetworkExecutionAuthorizer>(provider =>
-        {
-            var authorizer = provider.GetRequiredService<OwnedNetworkExecutionAuthorizer>();
-            return testOwnershipOverride.Enabled
-                ? new TestOwnershipExecutionAuthorizerDecorator(authorizer, testOwnershipOverride)
-                : authorizer;
-        });
+        // Validated at startup so BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE=true still fails fast outside
+        // Development/Test. The decorator itself is inert now that the resolver never denies ownership.
+        services.AddSingleton(TestOwnershipOverrideOptions.FromConfiguration(configuration, environmentName));
+        services.AddScoped<IOwnedNetworkExecutionAuthorizer, OwnedNetworkExecutionResolver>();
         services.AddSingleton<IValidateOptions<SubmissionOptions>, SubmissionOptionsValidator>();
         services.AddOptions<SubmissionOptions>().Bind(configuration.GetSection(SubmissionOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<ISubmissionAuthorizationResolver, SubmissionAuthorizationResolver>();

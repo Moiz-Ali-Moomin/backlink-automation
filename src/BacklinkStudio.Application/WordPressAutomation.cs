@@ -17,7 +17,6 @@ public sealed record OwnedWordPressSubmissionRequest(
 
 public sealed record OwnedNetworkExecutionAuthorization(
     bool Allowed,
-    bool TestOwnershipOverrideApplied,
     string Reason,
     OwnedNetworkProfile? Profile = null);
 

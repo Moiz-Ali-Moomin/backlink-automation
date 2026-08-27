@@ -59,25 +59,13 @@ public sealed class BacklinkWorkflowJobExecutor(
                 cancellationToken);
             if (source is null)
             {
-                var sourceOwnership = authorization.TestOwnershipOverrideApplied
-                    ? OwnershipStatus.Unverified
-                    : network.OwnershipStatus;
                 source = new SubmissionSource(workflow.ProjectId, network.Id, item.OriginalUrl,
-                    item.NormalizedUrl, item.Domain, item.Host, sourceOwnership,
-                    !authorization.TestOwnershipOverrideApplied,
-                    null, true, now);
+                    item.NormalizedUrl, item.Domain, item.Host, network.OwnershipStatus, true, null, true, now);
                 sources.Add(source);
             }
-            else if (!authorization.TestOwnershipOverrideApplied)
+            else
             {
                 source.AssociateWithOwnedNetwork(network.Id, network.OwnershipStatus, true, now);
-            }
-            else if (authorization.TestOwnershipOverrideApplied && source.OwnedNetworkProfileId != network.Id)
-            {
-                item.SetStatus(BacklinkWorkflowSourceStatus.NotAuthorized,
-                    "The existing source is associated with a different server-side network profile.", now);
-                notAuthorized++;
-                continue;
             }
 
             if (!campaignByProfile.TryGetValue(network.Id, out var workflowCampaignId))

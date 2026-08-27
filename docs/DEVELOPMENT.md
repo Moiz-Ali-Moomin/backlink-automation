@@ -26,12 +26,11 @@ Use `X-Api-Key: <BACKLINKSTUDIO_BOOTSTRAP_API_KEY>` for authenticated calls. Sto
 
 Start PostgreSQL, then set configuration with environment variables. Double underscores map nested .NET keys.
 
-Controlled Development/Test validation may temporarily authorize otherwise-unverified owned-network sources with
-`BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE=true` and a comma-separated exact-host allowlist in
-`BACKLINKSTUDIO_TEST_ALLOWED_HOSTS`. The allowlist has no wildcard or CIDR form and an empty value authorizes
-nothing. This setting changes only the runtime ownership decision: stored ownership status and automation permission
-remain unchanged, and compatibility, policy, rate-limit, blocklist, adapter, and verification checks still apply.
-Every applied override is audited by the worker. Enabling it outside Development or Test fails application startup.
+`BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE` and `BACKLINKSTUDIO_TEST_ALLOWED_HOSTS` no longer grant anything: the
+ownership gate they used to unlock was removed with `OwnedNetworkExecutionAuthorizer`, and sources now resolve to an
+owned-network profile without needing a pre-registered domain rule. Both settings are still parsed and validated at
+startup, so enabling the override outside Development or Test continues to fail application startup and an invalid
+non-exact allowlist entry is still rejected.
 
 PowerShell:
 

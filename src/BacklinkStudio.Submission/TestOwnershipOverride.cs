@@ -1,9 +1,11 @@
-using BacklinkStudio.Application;
 using BacklinkStudio.Domain;
 using Microsoft.Extensions.Configuration;
 
 namespace BacklinkStudio.Submission;
 
+// The ownership gate these settings used to unlock has been removed, so the override no longer grants
+// anything. The settings are still parsed at startup to keep the documented deployment contract: a
+// production host that sets BACKLINKSTUDIO_TEST_OWNERSHIP_OVERRIDE=true still fails fast.
 public sealed record TestOwnershipOverrideOptions(
     bool Enabled,
     IReadOnlySet<string> AllowedHosts,
@@ -57,42 +59,4 @@ public sealed record TestOwnershipOverrideOptions(
     private static bool IsPermittedEnvironment(string environmentName) =>
         environmentName.Equals("Development", StringComparison.OrdinalIgnoreCase) ||
         environmentName.Equals("Test", StringComparison.OrdinalIgnoreCase);
-}
-
-public sealed class TestOwnershipExecutionAuthorizerDecorator(
-    IOwnedNetworkExecutionAuthorizer inner,
-    TestOwnershipOverrideOptions options) : IOwnedNetworkExecutionAuthorizer
-{
-    public async Task<OwnedNetworkExecutionAuthorization> AuthorizeProfileAsync(
-        Guid projectId,
-        Guid ownedNetworkProfileId,
-        CancellationToken cancellationToken)
-    {
-        var decision = await inner.AuthorizeProfileAsync(projectId, ownedNetworkProfileId, cancellationToken);
-        return CanOverride(decision, requireExactHost: false)
-            ? AllowedByTestOverride(decision.Profile!)
-            : decision;
-    }
-
-    public async Task<OwnedNetworkExecutionAuthorization> AuthorizeSourceAsync(
-        Guid projectId,
-        OwnedNetworkSourceAuthorizationRequest source,
-        CancellationToken cancellationToken)
-    {
-        var decision = await inner.AuthorizeSourceAsync(projectId, source, cancellationToken);
-        var normalizedHost = OwnedNetworkDomain.NormalizeHost(source.Host);
-        return CanOverride(decision, requireExactHost: true) && options.AllowedHosts.Contains(normalizedHost)
-            ? AllowedByTestOverride(decision.Profile!)
-            : decision;
-    }
-
-    private bool CanOverride(OwnedNetworkExecutionAuthorization decision, bool requireExactHost) =>
-        !decision.Allowed &&
-        options.Enabled &&
-        decision.Reason == OwnedNetworkExecutionAuthorizer.OwnershipNotAuthorizedReason &&
-        decision.Profile is { Enabled: true } &&
-        (!requireExactHost || options.AllowedHosts.Count > 0);
-
-    private static OwnedNetworkExecutionAuthorization AllowedByTestOverride(OwnedNetworkProfile profile) =>
-        new(true, true, "test_ownership_override", profile);
 }

@@ -143,8 +143,7 @@ public sealed class SubmissionSourceImportJobExecutor(
         var profile = authorization.Allowed ? authorization.Profile : null;
         batch.Add(new SubmissionSourceImportItem(sourceImport.Id, profile?.Id, value.Trim(), normalized.NormalizedUrl!,
             normalized.Domain!, host, platform, cms, profile?.OwnershipStatus ?? OwnershipStatus.Unverified,
-            profile is not null && !authorization.TestOwnershipOverrideApplied,
-            tag, enabled));
+            profile is not null, tag, enabled));
         counters.Valid++;
     }
 

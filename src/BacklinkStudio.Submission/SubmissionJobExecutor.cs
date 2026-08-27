@@ -194,14 +194,6 @@ public sealed class SubmissionJobExecutor(
         submissions.AddAttempt(attempt);
         await SetWorkflowStatusAsync(job, work.Source.Id, BacklinkWorkflowSourceStatus.Submitting, null,
             now, cancellationToken);
-        if (ownership.TestOwnershipOverrideApplied)
-        {
-            audit.Append(new AuditEvent(ActorType.Worker, workerId, null,
-                "submission.test_ownership_override_applied", job.ProjectId, work.Campaign.Id, job.Id,
-                job.CorrelationId,
-                $"projectId={job.ProjectId};ownedNetworkProfileId={ownership.Profile.Id};sourceId={work.Source.Id};sourceHost={work.Source.Host};campaignId={work.Campaign.Id};jobId={job.Id};actor={workerId};timestamp={now:O};testOwnershipOverrideApplied=true;reason={ownership.Reason}",
-                "authorized", null, now));
-        }
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         OwnedWordPressSubmissionResult result;

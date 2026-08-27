@@ -85,26 +85,33 @@ public sealed class PostgresWorkflowTests
             var rows = await db.SubmissionSources.AsNoTracking()
                 .Where(value => value.SourceImportId == accepted.ImportId)
                 .OrderBy(value => value.Host).ToArrayAsync(cancellationToken);
-            var authorized = Assert.Single(rows, value => value.Host == "owned.example");
-            Assert.Equal(networkId, authorized.OwnedNetworkProfileId);
-            Assert.Equal(OwnershipStatus.Controlled, authorized.OwnershipStatus);
-            Assert.True(authorized.AutomationPermitted);
-            var unauthorized = Assert.Single(rows, value => value.Host == "not-authorized.example");
-            Assert.Null(unauthorized.OwnedNetworkProfileId);
-            Assert.Equal(OwnershipStatus.Unverified, unauthorized.OwnershipStatus);
-            Assert.False(unauthorized.AutomationPermitted);
+            var matched = Assert.Single(rows, value => value.Host == "owned.example");
+            Assert.Equal(networkId, matched.OwnedNetworkProfileId);
+            Assert.Equal(OwnershipStatus.Controlled, matched.OwnershipStatus);
+            Assert.True(matched.AutomationPermitted);
+            // No domain rule covers this host, so it resolves to the auto-provisioned default network
+            // instead of being imported as unexecutable.
+            var unmatched = Assert.Single(rows, value => value.Host == "not-authorized.example");
+            Assert.NotNull(unmatched.OwnedNetworkProfileId);
+            Assert.NotEqual(networkId, unmatched.OwnedNetworkProfileId);
+            Assert.NotEqual(OwnershipStatus.Unverified, unmatched.OwnershipStatus);
+            Assert.True(unmatched.AutomationPermitted);
+            Assert.Equal(OwnedNetworkExecutionResolver.DefaultProfileName, await db.OwnedNetworkProfiles
+                .AsNoTracking().Where(value => value.Id == unmatched.OwnedNetworkProfileId)
+                .Select(value => value.Name).SingleAsync(cancellationToken));
+            // The database still refuses an automated source that has no owned-network association.
             var invariant = await Assert.ThrowsAsync<PostgresException>(() =>
                 db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE submission_sources
-                    SET ownership_status = 'Owned', automation_permitted = true
-                    WHERE id = {unauthorized.Id}
+                    SET owned_network_profile_id = NULL, automation_permitted = true
+                    WHERE id = {unmatched.Id}
                     """, cancellationToken));
             Assert.Equal(PostgresErrorCodes.CheckViolation, invariant.SqlState);
         }
     }
 
     [Fact]
-    public async Task BacklinkWorkflowStart_PersistsMixedBatchBeforeWorkerAuthorization()
+    public async Task BacklinkWorkflowStart_PersistsMixedBatchAndResolvesEverySourceForExecution()
     {
         Assert.SkipWhen(Environment.GetEnvironmentVariable("BACKLINKSTUDIO_RUN_CONTAINER_TESTS") != "1",
             "Set BACKLINKSTUDIO_RUN_CONTAINER_TESTS=1 on a Docker-enabled host.");
@@ -173,17 +180,18 @@ public sealed class PostgresWorkflowTests
             var rows = await db.BacklinkWorkflowSources.AsNoTracking()
                 .Where(value => value.WorkflowId == accepted.WorkflowId)
                 .OrderBy(value => value.Host).ToArrayAsync(cancellationToken);
-            var authorized = Assert.Single(rows, value => value.Host == "owned.example");
-            Assert.Equal(BacklinkWorkflowSourceStatus.Checking, authorized.Status);
-            Assert.NotNull(authorized.SubmissionSourceId);
-            Assert.NotNull(authorized.CampaignId);
-            var unauthorized = Assert.Single(rows, value => value.Host == "not-authorized.example");
-            Assert.Equal(BacklinkWorkflowSourceStatus.NotAuthorized, unauthorized.Status);
-            Assert.Null(unauthorized.SubmissionSourceId);
-            Assert.Single(await db.Jobs.AsNoTracking()
+            // The removed ownership gate no longer strands a source: the matching host keeps its own
+            // network and the unmatched host resolves to the auto-provisioned default network.
+            Assert.All(rows, value => Assert.Equal(BacklinkWorkflowSourceStatus.Checking, value.Status));
+            Assert.All(rows, value => Assert.NotNull(value.SubmissionSourceId));
+            Assert.All(rows, value => Assert.NotNull(value.CampaignId));
+            var matched = Assert.Single(rows, value => value.Host == "owned.example");
+            var unmatched = Assert.Single(rows, value => value.Host == "not-authorized.example");
+            Assert.NotEqual(matched.CampaignId, unmatched.CampaignId);
+            Assert.Equal(2, (await db.Jobs.AsNoTracking()
                 .Where(value => value.Type == JobType.SubmissionSourceValidation &&
                                 value.CorrelationId == accepted.WorkflowId.ToString("D"))
-                .ToArrayAsync(cancellationToken));
+                .ToArrayAsync(cancellationToken)).Length);
         }
     }
 
