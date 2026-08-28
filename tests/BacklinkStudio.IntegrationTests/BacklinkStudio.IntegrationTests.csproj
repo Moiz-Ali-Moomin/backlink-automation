@@ -3,9 +3,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="SSH.NET" />
+    <ProjectReference Include="..\..\src\BacklinkStudio.Api\BacklinkStudio.Api.csproj" />
     <ProjectReference Include="..\..\src\BacklinkStudio.Infrastructure\BacklinkStudio.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\BacklinkStudio.Discovery\BacklinkStudio.Discovery.csproj" />
     <ProjectReference Include="..\..\src\BacklinkStudio.Opportunities\BacklinkStudio.Opportunities.csproj" />

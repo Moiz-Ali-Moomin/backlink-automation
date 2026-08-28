@@ -7,7 +7,6 @@ namespace BacklinkStudio.Discovery;
 public sealed class DiscoveryJobExecutor(
     IDiscoveryRepository discovery,
     ICandidateRepository candidates,
-    IPolicyRepository policies,
     IEnumerable<IDiscoveryProvider> providers,
     IUrlNormalizer urlNormalizer,
     IAuditSink audit,
@@ -45,7 +44,7 @@ public sealed class DiscoveryJobExecutor(
             var provider = providers.SingleOrDefault(x => string.Equals(x.Name, providerName, StringComparison.Ordinal))
                 ?? throw new ValidationException($"Discovery provider '{providerName}' is not registered.");
             var batch = await provider.DiscoverAsync(new DiscoveryRequest(job.ProjectId, job.CampaignId, input.Query, input.Content, input.Urls, state.Query.MaximumResults), cancellationToken);
-            var blocklist = await policies.ListEnabledBlocklistAsync(job.ProjectId, cancellationToken);
+            
             var accepted = new Dictionary<string, CandidateImportItem>(StringComparer.Ordinal);
             var errors = batch.Errors.Take(100).ToList();
             var invalid = 0;
@@ -62,12 +61,6 @@ public sealed class DiscoveryJobExecutor(
                     {
                         errors.Add(normalized.Error ?? "Invalid URL.");
                     }
-                    continue;
-                }
-
-                if (BlocklistMatcher.IsBlocked(blocklist, normalized.NormalizedUrl!, normalized.Domain!))
-                {
-                    blocked++;
                     continue;
                 }
 

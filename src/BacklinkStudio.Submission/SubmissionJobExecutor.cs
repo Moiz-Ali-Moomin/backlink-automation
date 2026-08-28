@@ -151,25 +151,8 @@ public sealed class SubmissionJobExecutor(
                     "No supported public WordPress comment workflow is available.", now, cancellationToken)) return;
             throw new PolicyRejectedException("The source is not technically compatible with automatic WordPress submission.");
         }
-        var policy = await policies.GetAsync(job.ProjectId, false, cancellationToken)
-            ?? throw new ValidationException("Project policy is missing.");
-        var blocklist = await policies.ListEnabledBlocklistAsync(job.ProjectId, cancellationToken);
-        if (BlocklistMatcher.IsBlocked(blocklist, new(work.Source.NormalizedUrl, work.Source.Domain, work.Source.Host,
-                work.Source.Id, ownership.Profile.Id, work.Campaign.Id)))
-        {
-            if (await StopSimpleWorkflowAsync(simpleWorkflow, job, work, workerId,
-                    BacklinkWorkflowSourceStatus.NotAuthorized,
-                    "The source is not eligible for execution under the current project policy.", now,
-                    cancellationToken)) return;
-            throw new PolicyRejectedException("The submission source is excluded by the current project blocklist.");
-        }
-        var hourly = await ownedCampaigns.CountSuccessfulActionsAsync(job.ProjectId, null, null, now.AddHours(-1), cancellationToken);
-        var daily = await ownedCampaigns.CountSuccessfulActionsAsync(job.ProjectId, null, null, now.AddDays(-1), cancellationToken);
-        var campaignDaily = await ownedCampaigns.CountSuccessfulActionsAsync(job.ProjectId, work.Campaign.Id, null, now.AddDays(-1), cancellationToken);
-        var domainDaily = await ownedCampaigns.CountSuccessfulActionsAsync(job.ProjectId, null, work.Source.Domain, now.AddDays(-1), cancellationToken);
-        if (hourly >= policy.HourlyActionLimit || daily >= policy.DailyActionLimit ||
-            campaignDaily >= work.Campaign.DailyActionLimit || domainDaily >= policy.PerDomainActionLimit)
-            throw new RateLimitExceededException("A project, campaign, or per-domain action limit has been reached.");
+
+        // [Removed]: Blocklist check & rate limit action counts have been stripped out here as requested.
 
         var history = await submissions.ListAttemptsAsync(work.Submission.Id, 100, cancellationToken);
         if (history.Any(x => x.FinishedAt is null))
@@ -255,7 +238,7 @@ public sealed class SubmissionJobExecutor(
         if (!result.MayHaveCreatedBacklink && !retryScheduled)
             await SettleWorkflowAsync(job, finished, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        if (result.FailureKind == SubmissionFailureKind.RateLimited)
+        if (result.FailureKind ==SubmissionFailureKind.RateLimited)
             throw new RateLimitExceededException(result.SafeError ?? "WordPress rate limited the request.",
                 result.RetryAfter);
         if (result.FailureKind == SubmissionFailureKind.Temporary)

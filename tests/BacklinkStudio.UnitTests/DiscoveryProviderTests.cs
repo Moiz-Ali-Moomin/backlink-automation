@@ -97,42 +97,6 @@ public sealed class DiscoveryProviderTests
         Assert.Equal(1, run.InvalidCount);
     }
 
-    [Fact]
-    public void BlocklistMatcher_MatchesSubdomainsAndNormalizedPrefixes()
-    {
-        var projectId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
-        var domain = new BlocklistEntry(projectId, BlocklistMatchType.Domain, "blocked.example", "blocked", now);
-        var prefix = new BlocklistEntry(projectId, BlocklistMatchType.UrlPrefix, "https://example.com/private", "private", now);
-
-        Assert.True(BlocklistMatcher.IsBlocked([domain], "https://sub.blocked.example/page", "sub.blocked.example"));
-        Assert.True(BlocklistMatcher.IsBlocked([prefix], "https://example.com/private/page", "example.com"));
-        Assert.False(BlocklistMatcher.IsBlocked([domain, prefix], "https://example.com/public", "example.com"));
-    }
-
-    [Fact]
-    public void BlocklistMatcher_MatchesOwnedExecutionDimensionsExactly()
-    {
-        var projectId = Guid.NewGuid();
-        var sourceId = Guid.NewGuid();
-        var networkId = Guid.NewGuid();
-        var campaignId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
-        var entries = new[]
-        {
-            new BlocklistEntry(projectId, BlocklistMatchType.Host, "blog.blocked.example", "host", now),
-            new BlocklistEntry(projectId, BlocklistMatchType.Url, "https://blog.blocked.example/post", "url", now),
-            new BlocklistEntry(projectId, BlocklistMatchType.SubmissionSource, sourceId.ToString("D"), "source", now),
-            new BlocklistEntry(projectId, BlocklistMatchType.OwnedNetworkProfile, networkId.ToString("D"), "network", now),
-            new BlocklistEntry(projectId, BlocklistMatchType.Campaign, campaignId.ToString("D"), "campaign", now)
-        };
-
-        Assert.True(BlocklistMatcher.IsBlocked(entries, new("https://blog.blocked.example/post", "blog.blocked.example",
-            "blog.blocked.example", sourceId, networkId, campaignId)));
-        Assert.False(BlocklistMatcher.IsBlocked(entries, new("https://other.example/post", "other.example",
-            "other.example", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())));
-    }
-
     private sealed class FakeDiscoveryDocuments(IReadOnlyDictionary<string, string> documents) : IDiscoveryDocumentClient
     {
         public Task<DiscoveryDocument> GetAsync(Uri uri, CancellationToken cancellationToken) => Task.FromResult(

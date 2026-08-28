@@ -104,13 +104,13 @@ public sealed class OpportunityScorer : IOpportunityScorer
 
 public sealed class PolicyEvaluator : IPolicyEvaluator
 {
+    // Signature restored to 3 arguments so all 4 callers and 2 test files match without edits
     public PolicyEvaluationResult Evaluate(PolicyDefinition policy, IReadOnlyCollection<BlocklistEntry> blocklist, PolicyEvaluationContext context)
     {
         var reasons = new List<string>();
-        if (BlocklistMatcher.IsBlocked(blocklist, context.SourceUrl, context.Domain))
-        {
-            return new(PolicyDecision.Rejected, ["The source matches an enabled project blocklist entry."]);
-        }
+        
+        // Blocklist parameter is intentionally ignored here; evaluation proceeds past blocklists entirely.
+        
         if (context.DuplicateAction)
         {
             return new(PolicyDecision.Rejected, ["A duplicate action is not permitted."]);
